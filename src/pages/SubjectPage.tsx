@@ -16,6 +16,14 @@ import {
   Button,
 } from "@mui/material";
 import NotesIcon from "@mui/icons-material/Notes";
+import { db } from "../firebase";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  getDocs,
+} from "firebase/firestore";
 
 interface DriveFile {
   id: string;
@@ -45,81 +53,95 @@ export default function SubjectPage({
   const [selectedFile, setSelectedFile] = useState<FileState | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
 
-  const storageKey = `tuhfah-tracker:${userEmail}:${subjectId}`;
- //console.warn("folderId - " + folderId);
- //console.warn("access token - " + accessToken);
-  // Fetch files from Google Drive API
+  //const storageKey = `tuhfah-tracker:${userEmail}:${subjectId}`;
+  //// Fetch files from Google Drive API
+  // 🔑 Firestore reference path
+  const userCollection = collection(
+    db,
+    "users",
+    userEmail,
+    "subjects",
+    subjectId || "unknown",
+    "files"
+  );
+  // Fetch Drive files + Firestore progress
   useEffect(() => {
   const fetchFiles = async () => {
     if (!accessToken || !folderId) return;
 
-    // Load saved state from localStorage first
-    const saved = localStorage.getItem(storageKey);
-    let savedState: Record<string, { watched: boolean; notes: string }> = {};
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        parsed.forEach((f: any) => {
-          savedState[f.id] = { watched: f.watched, notes: f.notes };
+    try {
+        // 1. Get Drive files
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,webViewLink,mimeType)`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        const data = await res.json();
+        const driveFiles: DriveFile[] = data.files || [];
+
+        // 2. Get Firestore saved progress
+        const snapshot = await getDocs(userCollection);
+        const saved: Record<string, { watched: boolean; notes: string }> = {};
+        snapshot.forEach((docSnap) => {
+          saved[docSnap.id] = docSnap.data() as {
+            watched: boolean;
+            notes: string;
+
+          };
         });
-      } catch {
-        console.warn("Invalid saved state, ignoring");
+
+        // 3. Merge
+        const merged = driveFiles.map((f) => ({
+          ...f,
+          watched: saved[f.id]?.watched ?? false,
+          notes: saved[f.id]?.notes ?? "",
+        }));
+
+        setFiles(merged);
+      } catch (err) {
+        console.error("Error fetching files", err);
       }
-    }
-
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,webViewLink,mimeType)`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    const data = await res.json();
-    const driveFiles: DriveFile[] = data.files || [];
-
-    setFiles((prev) =>
-      driveFiles.map((f) => ({
-        ...f,
-        // Prefer savedState first, then prev in-memory state
-        watched:
-          savedState[f.id]?.watched ??
-          prev.find((p) => p.id === f.id)?.watched ??
-          false,
-        notes:
-          savedState[f.id]?.notes ??
-          prev.find((p) => p.id === f.id)?.notes ??
-          "",
-      }))
-    );
-  };
+    };
 
   fetchFiles();
-}, [subjectId, accessToken, folderId, storageKey]);
+}, [subjectId, accessToken, folderId]);
 
+    // Toggle watched
+    const toggleWatched = async (file: FileState) => {
+    const updated = { ...file, watched: !file.watched };
 
-  // Persist watched + notes state
-  useEffect(() => {
-    if (files.length > 0) {
-      localStorage.setItem(storageKey, JSON.stringify(files));
-    }
-  }, [files, storageKey]);
-
-  const toggleWatched = (fileId: string) => {
     setFiles((prev) =>
-      prev.map((f) =>
-        f.id === fileId ? { ...f, watched: !f.watched } : f
-      )
+      prev.map((f) => (f.id === file.id ? updated : f))
+    );
+
+    // Save to Firestore
+    await setDoc(
+      doc(userCollection, file.id),
+      { watched: updated.watched, notes: updated.notes },
+      { merge: true }
     );
   };
 
+  // Open notes dialog
   const handleOpenNotes = (file: FileState) => {
     setSelectedFile(file);
     setNoteDraft(file.notes);
   };
 
-  const handleSaveNotes = () => {
+  // Save notes to Firestore
+  const handleSaveNotes = async () => {
     if (selectedFile) {
+      const updated = { ...selectedFile, notes: noteDraft };
+
       setFiles((prev) =>
-        prev.map((f) =>
-          f.id === selectedFile.id ? { ...f, notes: noteDraft } : f
-        )
+        prev.map((f) => (f.id === selectedFile.id ? updated : f))
+      );
+
+      await setDoc(
+        doc(userCollection, selectedFile.id),
+        { watched: updated.watched, notes: updated.notes },
+        { merge: true }
       );
     }
     setSelectedFile(null);
@@ -151,7 +173,7 @@ export default function SubjectPage({
               <TableCell>
                 <Checkbox
                   checked={file.watched}
-                  onChange={() => toggleWatched(file.id)}
+                  onChange={() => toggleWatched(file)}
                 />
               </TableCell>
               <TableCell>
