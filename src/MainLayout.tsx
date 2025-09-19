@@ -25,10 +25,12 @@ import { styled, useTheme } from '@mui/material/styles';
 import { Link, Routes, Route, Navigate } from 'react-router-dom';
 import SubjectPage from './pages/SubjectPage';
 import { GoogleUser } from './LoginScreen'; 
+import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 
 interface MainLayoutProps {
   user: GoogleUser;
   onLogout: () => void;
+  setUser: React.Dispatch<React.SetStateAction<GoogleUser | null>>;
 }
 
 const drawerWidth = 240;
@@ -68,7 +70,7 @@ const DrawerStyled = styled(Drawer, {
   },
 }));
 
-export default function MainLayout({ user, onLogout }: MainLayoutProps) {
+export default function MainLayout({ user, onLogout, setUser }: MainLayoutProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -109,9 +111,42 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 	  'subject-f': '1KFcOSzeGjLOwAgwtzceob_24sRTKx5Jd',
 	};
 	
+  const [yearDialogOpen, setYearDialogOpen] = useState(false);
+  const [yearDraft, setYearDraft] = useState(user.year || 1);
+
+  const handleYearSave = () => {
+    if (yearDraft >= 1 && yearDraft <= 8) {
+      const updatedUser = { ...user, year: yearDraft };
+      setUser(updatedUser);
+      localStorage.setItem("tuhfah-user", JSON.stringify(updatedUser));
+      localStorage.setItem("tuhfah-year", yearDraft.toString());
+      setYearDialogOpen(false);
+    } else {
+      alert("Year must be between 1 and 8.");
+    }
+  };
+
+	
   return (
     <div style={{ display: 'flex' }}>
       <CssBaseline />
+	  <Dialog open={yearDialogOpen} onClose={() => setYearDialogOpen(false)}>
+        <DialogTitle>Edit Year</DialogTitle>
+        <DialogContent>
+          <TextField
+            type="number"
+            label="Year (1-8)"
+            value={yearDraft}
+            onChange={(e) => setYearDraft(parseInt(e.target.value))}
+            fullWidth
+            inputProps={{ min: 1, max: 8 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setYearDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleYearSave} variant="contained">Save</Button>
+        </DialogActions>
+      </Dialog>
       <AppBar position="fixed" style={{ zIndex: theme.zIndex.drawer + 1 }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -142,7 +177,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
               >
-                <MenuItem disabled>{user.name}</MenuItem>
+                <MenuItem disabled>{user.name} {user.year ? `(Year ${user.year})` : ""}</MenuItem>
+                <MenuItem onClick={() => setYearDialogOpen(true)}>Edit Year</MenuItem>
                 <MenuItem onClick={handleLogoutClick}>Logout</MenuItem>
               </Menu>
             </>
@@ -157,7 +193,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           )}
         </Toolbar>
       </AppBar>
-
+      
       <DrawerStyled variant="permanent" open={open}>
         <Toolbar />
         <Divider />
@@ -188,7 +224,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           ))}
         </List>
       </DrawerStyled>
-
+	  
       <Main open={open}>
         <Toolbar />
         <Routes>

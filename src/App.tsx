@@ -64,7 +64,7 @@ function App() {
   return (
     <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID!}>
       {user ? (
-        <MainLayout user={user} onLogout={handleLogout} />
+        <MainLayout user={user} onLogout={handleLogout} setUser={setUser} />
       ) : (
         <LoginScreen onLogin={handleLogin} />
       )}
