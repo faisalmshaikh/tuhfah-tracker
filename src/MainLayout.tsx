@@ -24,13 +24,7 @@ import BookIcon from '@mui/icons-material/Book';
 import { styled, useTheme } from '@mui/material/styles';
 import { Link, Routes, Route, Navigate } from 'react-router-dom';
 import SubjectPage from './pages/SubjectPage';
-
-type GoogleUser = {
-  name: string;
-  email: string;
-  picture: string;
-  token: string; // new
-};
+import { GoogleUser } from './LoginScreen'; 
 
 interface MainLayoutProps {
   user: GoogleUser;
