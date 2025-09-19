@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-//import logo from './logo.svg';
+import logo from './logo.png';
 //import { GoogleLogin, googleLogout } from '@react-oauth/google';
 import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
 //import axios from 'axios';
