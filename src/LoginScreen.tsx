@@ -7,6 +7,7 @@ export type GoogleUser = {
   email: string;
   picture: string;
   token: string; // 👈 access_token for Drive API
+  year?: number;
 };
 
 export default function LoginScreen({ onLogin }: { onLogin: (user: GoogleUser) => void }) {

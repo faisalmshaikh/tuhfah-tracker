@@ -10,16 +10,51 @@ function App() {
 
   // Restore persisted login
   useEffect(() => {
-    const stored = localStorage.getItem("tuhfah-user");
-    if (stored) {
-      setUser(JSON.parse(stored));
+  const storedUser = localStorage.getItem("tuhfah-user");
+  const storedYear = localStorage.getItem("tuhfah-year");
+  if (storedUser) {
+    const parsed = JSON.parse(storedUser);
+    if (storedYear) {
+      parsed.year = parseInt(storedYear, 10);
     }
-  }, []);
+    setUser(parsed);
+  }
+}, []);
 
-  const handleLogin = (userData: GoogleUser) => {
-    setUser(userData);
-    localStorage.setItem("tuhfah-user", JSON.stringify(userData));
+  const handleLogin = async (userData: GoogleUser) => {
+  // Check if year is already stored
+  let storedYear = localStorage.getItem("tuhfah-year");
+
+  if (!storedYear) {
+    let year: number | null = null;
+
+    while (year === null) {
+      const input = prompt("Enter your year (1-8):");
+      if (input === null) break; // user cancelled
+
+      const parsed = parseInt(input, 10);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+        year = parsed;
+      } else {
+        alert("Invalid year. Please enter a number between 1 and 8.");
+      }
+    }
+
+    if (year !== null) {
+      storedYear = year.toString();
+      localStorage.setItem("tuhfah-year", storedYear);
+    }
+  }
+
+  const finalUser = {
+    ...userData,
+    year: storedYear ? parseInt(storedYear, 10) : undefined,
   };
+
+  setUser(finalUser);
+  localStorage.setItem("tuhfah-user", JSON.stringify(finalUser));
+};
+
 
   const handleLogout = () => {
     setUser(null);
