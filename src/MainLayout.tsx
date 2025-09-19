@@ -98,12 +98,12 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   };
 
   const subjects = [
-    { id: 'subject-a', label: 'Subject A' },
-    { id: 'subject-b', label: 'Subject B' },
-    { id: 'subject-c', label: 'Subject C' },
-    { id: 'subject-d', label: 'Subject D' },
-    { id: 'subject-e', label: 'Subject E' },
-    { id: 'subject-f', label: 'Subject F' },
+    { id: 'subject-a', label: 'Qisas' },
+    { id: 'subject-b', label: 'Nahw' },
+    { id: 'subject-c', label: 'Sarf' },
+    { id: 'subject-d', label: 'Quduri' },
+    { id: 'subject-e', label: 'Quran' },
+    { id: 'subject-f', label: 'Tarbiyyah' },
   ];
 
 	const folderMap: Record<string, string> = {
