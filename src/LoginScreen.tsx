@@ -12,7 +12,7 @@ export type GoogleUser = {
 
 export default function LoginScreen({ onLogin }: { onLogin: (user: GoogleUser) => void }) {
   const login = useGoogleLogin({
-    scope: "openid email profile https://www.googleapis.com/auth/drive.file",
+    scope: "openid email profile https://www.googleapis.com/auth/drive.readonly",
     onSuccess: async (tokenResponse) => {
       try {
         // Fetch user profile info with access_token
