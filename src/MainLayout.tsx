@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -26,6 +26,10 @@ import { Link, Routes, Route, Navigate } from 'react-router-dom';
 import SubjectPage from './pages/SubjectPage';
 import { GoogleUser } from './LoginScreen'; 
 import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
+import AdminScreen from "./pages/AdminScreen";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "./firebase";
+
 
 interface MainLayoutProps {
   user: GoogleUser;
@@ -93,24 +97,9 @@ export default function MainLayout({ user, onLogout, setUser }: MainLayoutProps)
     onLogout();
   };
 
-  const subjects = [
-    { id: 'subject-a', label: 'Qisas' },
-    { id: 'subject-b', label: 'Nahw' },
-    { id: 'subject-c', label: 'Sarf' },
-    { id: 'subject-d', label: 'Quduri' },
-    { id: 'subject-e', label: 'Quran' },
-    { id: 'subject-f', label: 'Tarbiyyah' },
-  ];
-
-	const folderMap: Record<string, string> = {
-	  'subject-a': '1uKLo5IvIzvWj8-7YMThisCITBpJRceiD',
-	  'subject-b': '1wff8EW8MdhibXBTS9ly8kvD8F24O79jn',
-	  'subject-c': '1DYUFj7R1XYfgOD8GvXh9gNqtdNGbxgh7',
-	  'subject-d': '1Ka86L_xKjWtRQ_TWgzsYp98y59FM4Xkv',
-	  'subject-e': '1vdesCROBmriPVl_wY3Vzz0DR0OwSeUyc',
-	  'subject-f': '1KFcOSzeGjLOwAgwtzceob_24sRTKx5Jd',
-	};
-	
+  
+  const [subjects, setSubjects] = useState<{ id: string; label: string }[]>([]);
+  const [folderMap, setFolderMap] = useState<Record<string, string>>({});	
   const [yearDialogOpen, setYearDialogOpen] = useState(false);
   const [yearDraft, setYearDraft] = useState(user.year || 1);
 
@@ -125,6 +114,37 @@ export default function MainLayout({ user, onLogout, setUser }: MainLayoutProps)
       alert("Year must be between 1 and 8.");
     }
   };
+ 
+ useEffect(() => {
+  const fetchFolders = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "config", "folders", "items"));
+      const data = snapshot.docs.map((doc) => doc.data() as { year: number; subject: string; folderId: string });
+
+      // Filter by the logged-in user’s year (from localStorage)
+      const userYear = Number(localStorage.getItem("tuhfah-year"));
+      const filtered = data.filter((d) => d.year === userYear);
+
+      // Create subject list and folder map
+      const subjectList = filtered.map((d) => ({
+        id: d.subject.toLowerCase().replace(/\s+/g, "-"), // e.g. 'Subject A' → 'subject-a'
+        label: d.subject,
+      }));
+
+      const map: Record<string, string> = {};
+      filtered.forEach((d) => {
+        map[d.subject.toLowerCase().replace(/\s+/g, "-")] = d.folderId;
+      });
+
+      setSubjects(subjectList);
+      setFolderMap(map);
+    } catch (err) {
+      console.error("Error loading folder configs:", err);
+    }
+  };
+
+  fetchFolders();
+}, []);
 
 	
   return (
@@ -198,47 +218,49 @@ export default function MainLayout({ user, onLogout, setUser }: MainLayoutProps)
         <Toolbar />
         <Divider />
         <List>
-          {subjects.map((s) => (
-            <ListItem key={s.id} disablePadding sx={{ display: 'block' }}>
-              <ListItemButton
-                component={Link}
-                to={`/${s.id}`}
-                sx={{
-                  minHeight: 48,
-                  justifyContent: open ? 'initial' : 'center',
-                  px: 2.5,
-                }}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: 0,
-                    mr: open ? 3 : 'auto',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <BookIcon />
-                </ListItemIcon>
-                <ListItemText primary={s.label} sx={{ opacity: open ? 1 : 0 }} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
+  {subjects.map((s) => (
+    <ListItem key={s.id} disablePadding sx={{ display: 'block' }}>
+      <ListItemButton
+        component={Link}
+        to={`/${s.id}`}
+        sx={{
+          minHeight: 48,
+          justifyContent: open ? 'initial' : 'center',
+          px: 2.5,
+        }}
+      >
+        <ListItemIcon
+          sx={{
+            minWidth: 0,
+            mr: open ? 3 : 'auto',
+            justifyContent: 'center',
+          }}
+        >
+          <BookIcon />
+        </ListItemIcon>
+        <ListItemText primary={s.label} sx={{ opacity: open ? 1 : 0 }} />
+      </ListItemButton>
+    </ListItem>
+  ))}
+</List>
       </DrawerStyled>
 	  
       <Main open={open}>
         <Toolbar />
         <Routes>
-          <Route path="/" element={<Navigate to="/subject-a" replace />} />
-          <Route
-			path="/:subjectId"
-			element={
-			  <SubjectPage
-				userEmail={user.email}
-				accessToken={user.token}
-				folderMap={folderMap} // later derive from subjectId
-			  />
-			}
-		  />
+          <Route path="/admin" element={<AdminScreen />} />
+		  <Route path="/" element={<Navigate to={`/${subjects[0]?.id || ""}`} replace />} />
+			<Route
+			  path="/:subjectId"
+			  element={
+				<SubjectPage
+				  userEmail={user.email}
+				  accessToken={user.token}
+				  folderMap={folderMap}
+				/>
+			  }
+			/>
+
         </Routes>
       </Main>
     </div>
