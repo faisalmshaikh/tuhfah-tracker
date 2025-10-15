@@ -14,8 +14,14 @@ import {
   DialogActions,
   TextField,
   Button,
+  Breadcrumbs,
+  Link as MuiLink,
+  Typography,
 } from "@mui/material";
 import NotesIcon from "@mui/icons-material/Notes";
+import FolderIcon from "@mui/icons-material/Folder";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import { db } from "../firebase";
 import {
   doc,
@@ -28,7 +34,8 @@ import {
 interface DriveFile {
   id: string;
   name: string;
-  webViewLink: string;
+  mimeType: string;
+  webViewLink?: string;
 }
 
 interface FileState extends DriveFile {
@@ -48,10 +55,14 @@ export default function SubjectPage({
   folderMap,
 }: SubjectPageProps) {
   const { subjectId } = useParams<{ subjectId: string }>();
-  const folderId = subjectId ? folderMap[subjectId] : null;
+  const rootFolderId = subjectId ? folderMap[subjectId] : null;
   const [files, setFiles] = useState<FileState[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileState | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+ const [breadcrumbs, setBreadcrumbs] = useState<{ id: string; name: string }[]>(
+    []
+  );
+  const [currentFolderId, setCurrentFolderId] = useState(rootFolderId || "");
 
   //const storageKey = `tuhfah-tracker:${userEmail}:${subjectId}`;
   //// Fetch files from Google Drive API
@@ -64,49 +75,78 @@ export default function SubjectPage({
     subjectId || "unknown",
     "files"
   );
+
+useEffect(() => {
+  if (!folderMap || !subjectId) return;
+
+  const rootFolderId = folderMap[subjectId];
+  if (rootFolderId) {
+    setCurrentFolderId(rootFolderId);
+  } else {
+    console.warn("⚠️ No folder found for subject:", subjectId);
+  }
+}, [folderMap, subjectId]);
   // Fetch Drive files + Firestore progress
-  useEffect(() => {
+ useEffect(() => {
+  if (!accessToken || !currentFolderId) return;
+
   const fetchFiles = async () => {
-    if (!accessToken || !folderId) return;
-
     try {
-        // 1. Get Drive files
-        const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,webViewLink,mimeType)`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
-        const data = await res.json();
-        const driveFiles: DriveFile[] = data.files || [];
+      // 1️⃣ Get Drive files
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q='${currentFolderId}'+in+parents&fields=files(id,name,webViewLink,mimeType)`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+      const data = await res.json();
 
-        // 2. Get Firestore saved progress
-        const snapshot = await getDocs(userCollection);
-        const saved: Record<string, { watched: boolean; notes: string }> = {};
-        snapshot.forEach((docSnap) => {
-          saved[docSnap.id] = docSnap.data() as {
-            watched: boolean;
-            notes: string;
+      const driveFiles: DriveFile[] = data.files || [];
 
-          };
-        });
+      // 2️⃣ Get Firestore saved progress
+      const snapshot = await getDocs(userCollection);
+      const saved: Record<string, { watched: boolean; notes: string }> = {};
+      snapshot.forEach((docSnap) => {
+        saved[docSnap.id] = docSnap.data() as {
+          watched: boolean;
+          notes: string;
+        };
+      });
 
-        // 3. Merge
-        const merged = driveFiles.map((f) => ({
-          ...f,
-          watched: saved[f.id]?.watched ?? false,
-          notes: saved[f.id]?.notes ?? "",
-        }));
+      // 3️⃣ Merge both datasets
+      const merged = driveFiles.map((f) => ({
+        ...f,
+        watched: saved[f.id]?.watched ?? false,
+        notes: saved[f.id]?.notes ?? "",
+      }));
 
-        setFiles(merged);
-      } catch (err) {
-        console.error("Error fetching files", err);
-      }
-    };
+      setFiles(merged);
+    } catch (err) {
+      console.error("Error fetching files", err);
+    }
+  };
 
   fetchFiles();
-}, [subjectId, accessToken, folderId]);
+}, [accessToken, currentFolderId]);
 
+
+  // 🔄 Handle folder click
+  const handleOpenFolder = (folder: DriveFile) => {
+    setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    setCurrentFolderId(folder.id);
+  };
+
+  // 🔙 Go back to previous folder
+  const handleBreadcrumbClick = (index: number) => {
+    const newTrail = breadcrumbs.slice(0, index);
+    setBreadcrumbs(newTrail);
+    if (index === 0) {
+      setCurrentFolderId(rootFolderId!);
+    } else {
+      setCurrentFolderId(breadcrumbs[index - 1].id);
+    }
+  };
+  
     // Toggle watched
     const toggleWatched = async (file: FileState) => {
     const updated = { ...file, watched: !file.watched };
@@ -147,13 +187,45 @@ export default function SubjectPage({
     setSelectedFile(null);
   };
 
+const isFolder = (file: DriveFile) => file.mimeType === "application/vnd.google-apps.folder";
+
   return (
     <div>
-      <h2>{subjectId?.replace("-", " ").toUpperCase()}</h2>
+      <Typography variant="h5" gutterBottom>
+        {subjectId?.replace("-", " ").toUpperCase()}
+      </Typography>
+
+      {/* 🧭 Breadcrumb navigation */}
+      {breadcrumbs.length > 0 && (
+        <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
+          <MuiLink
+            underline="hover"
+            color="inherit"
+            onClick={() => {
+              setBreadcrumbs([]);
+              setCurrentFolderId(rootFolderId!);
+            }}
+            sx={{ cursor: "pointer" }}
+          >
+            Root
+          </MuiLink>
+          {breadcrumbs.map((crumb, i) => (
+            <MuiLink
+              key={crumb.id}
+              underline="hover"
+              color={i === breadcrumbs.length - 1 ? "text.primary" : "inherit"}
+              sx={{ cursor: "pointer" }}
+              onClick={() => handleBreadcrumbClick(i)}
+            >
+              {crumb.name}
+            </MuiLink>
+          ))}
+        </Breadcrumbs>
+      )}
       <Table>
         <TableHead>
           <TableRow>
-            <TableCell>File</TableCell>
+            <TableCell>File / Folder</TableCell>
             <TableCell>Watched</TableCell>
             <TableCell>Notes</TableCell>
           </TableRow>
@@ -162,30 +234,46 @@ export default function SubjectPage({
           {files.map((file) => (
             <TableRow key={file.id}>
               <TableCell>
-                <a
-                  href={file.webViewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {file.name}
-                </a>
+                {isFolder(file) ? (
+                  <Button
+                    startIcon={<FolderIcon />}
+                    onClick={() => handleOpenFolder(file)}
+                  >
+                    {file.name}
+                  </Button>
+                ) : (
+                  <a
+                    href={file.webViewLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
+                  >
+                    <InsertDriveFileIcon sx={{ mr: 1 }} />
+                    {file.name}
+                  </a>
+                )}
               </TableCell>
               <TableCell>
-                <Checkbox
-                  checked={file.watched}
-                  onChange={() => toggleWatched(file)}
-                />
+                {!isFolder(file) && (
+                  <Checkbox
+                    checked={file.watched}
+                    onChange={() => toggleWatched(file)}
+                  />
+                )}
               </TableCell>
               <TableCell>
-                <IconButton onClick={() => handleOpenNotes(file)}>
-                  <NotesIcon />
-                </IconButton>
+                {!isFolder(file) && (
+                  <IconButton onClick={() => handleOpenNotes(file)}>
+                    <NotesIcon />
+                  </IconButton>
+                )}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
 
+      {/* 📝 Notes dialog */}				   
       <Dialog open={!!selectedFile} onClose={() => setSelectedFile(null)}>
         <DialogTitle>Notes for {selectedFile?.name}</DialogTitle>
         <DialogContent>

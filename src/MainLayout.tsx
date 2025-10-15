@@ -253,11 +253,15 @@ export default function MainLayout({ user, onLogout, setUser }: MainLayoutProps)
 			<Route
 			  path="/:subjectId"
 			  element={
+			  folderMap && Object.keys(folderMap).length > 0 ? (
 				<SubjectPage
 				  userEmail={user.email}
 				  accessToken={user.token}
 				  folderMap={folderMap}
 				/>
+				) : (
+        <div style={{ padding: "2rem" }}>Loading subjects...</div>
+      )
 			  }
 			/>
 
